@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DPC-TERM // STRATORESERVOIR SENSORS</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      font-family: 'Share Tech Mono', 'VT323', monospace;
+      cursor: crosshair;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #000000;
+      color: #ffffff;
+      user-select: none;
+    }
+
+    /* Crisp CRT Scanline Raster */
+    .crt-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 40;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%, 
+        rgba(0, 0, 0, 0.25) 50%
+      );
+      background-size: 100% 3px;
+    }
+
+    #game-viewport {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    #game-viewport canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Floating Cursor HUD (Borderless, transparent background, text floating) */
+    #floating-cursor-hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 50;
+      background: transparent;
+      border: none;
+      padding: 4px 6px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #ffffff;
+      min-width: 250px;
+      max-width: 380px;
+      text-shadow: 0px 1px 3px rgba(0, 0, 0, 0.9), 0px 0px 2px rgba(0, 0, 0, 0.9);
+    }
+
+    /* Top-Left Level / Day HUD */
+    #level-days-hud {
+      position: fixed;
+      top: 10px;
+      left: 12px;
+      z-index: 55;
+      color: #facc15;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      pointer-events: none;
+      background: rgba(5, 5, 7, 0.85);
+      border: 1px solid rgba(250, 204, 21, 0.25);
+      padding: 4px 8px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .term-yellow {
+      color: #facc15;
+    }
+
+    .term-dim {
+      color: #737373;
+    }
+
+    .term-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 60;
+      background: #050505;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #facc15;
+      width: 480px;
+      max-width: 90vw;
+      padding: 24px 22px;
+      text-align: center;
+      pointer-events: auto;
+    }
+
+    /* PDA Overlay Modal */
+    #fleet-pda-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 9999;
+      background: #050505;
+      border: 1px solid #facc15;
+      width: 780px;
+      max-width: 95vw;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 18px 22px;
+      pointer-events: auto;
+    }
+
+    .pda-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .pda-card {
+      border: 1px solid #262626;
+      background: #0a0a0a;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .pda-card:hover {
+      border-color: #facc15;
+    }
+
+    .pda-buy-btn {
+      margin-top: 10px;
+      padding: 7px 12px;
+      background: #000000;
+      border: 1px solid #facc15;
+      border-bottom: 2px solid #facc15;
+      color: #facc15;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+
+    .pda-buy-btn:hover:not(:disabled) {
+      background: #facc15;
+      color: #000000;
+    }
+
+    .pda-buy-btn:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .pda-buy-btn:disabled {
+      border-color: #333333;
+      color: #444444;
+      cursor: not-allowed;
+    }
+
+    .dragging {
+      opacity: 0.4;
+    }
+
+    .drop-target {
+      border-color: #facc15 !important;
+      background: rgba(250, 204, 21, 0.08) !important;
+    }
+
+    /* How-To-Play Operations Manual Modal */
+    #how-to-play-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 70;
+      background: #050505;
+      border: 1px solid #facc15;
+      width: 560px;
+      max-width: 92vw;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 20px 24px;
+      pointer-events: auto;
+    }
+
+    kbd {
+      display: inline-block;
+      min-width: 20px;
+      padding: 2px 6px;
+      border: 1px solid #facc15;
+      background: #000000;
+      color: #facc15;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      text-align: center;
+      line-height: 1.4;
+      vertical-align: middle;
+    }
+
+    .mouse {
+      display: inline-block;
+      padding: 2px 6px;
+      border: 1px solid #666666;
+      background: #000000;
+      color: #ffffff;
+      font-size: 11px;
+      line-height: 1.4;
+      vertical-align: middle;
+    }
+
+    .howto-section {
+      border-bottom: 1px dashed #262626;
+      padding: 8px 0;
+    }
+
+    .howto-section h3 {
+      margin: 0 0 6px 0;
+      font-size: 11px;
+      color: #facc15;
+      font-weight: bold;
+    }
+
+    .howto-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      line-height: 1.4;
+      margin: 4px 0;
+    }
+
+    .howto-keys {
+      min-width: 130px;
+      white-space: nowrap;
+      color: #ffffff;
+    }
+
+    .howto-desc {
+      color: #a3a3a3;
+    }
+
+    /* Terminal Shutdown Screen (EXIT) */
+    #exit-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #000000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body style="position: relative; width: 100vw; height: 100vh; background: #000000; color: #ffffff; margin: 0; overflow: hidden;">
+
+  <!-- Fullscreen Sensors Viewport -->
+  <div id="game-viewport"></div>
+
+  <!-- CRT Terminal Scanlines Overlay -->
+  <div class="crt-overlay"></div>
+
+  <!-- Top-Left Level / Day HUD -->
+  <div id="level-days-hud" class="hidden">LEVEL 1 · WAVE 1 · DAY 1</div>
+
+  <!-- Terminal Cursor-Attached Telemetry Frame (Unified HUD) -->
+  <div id="floating-cursor-hud"></div>
+
+  <!-- Fleet PDA Logistics & Requisition Modal -->
+  <div id="fleet-pda-modal" class="hidden">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px;">
+      <div>
+        <div class="term-yellow" style="font-size: 14px; font-weight: bold;">// DPC ARCOLOGY LOGISTICS TERMINAL · SECTOR 13</div>
+        <div class="term-dim" style="font-size: 10px;">EXPEDITION REQUISITIONS // [TAB] RESUME</div>
+      </div>
+      <div style="text-align: right;">
+        <div style="color: #4ade80; font-size: 13px; font-weight: bold;">FUNDS: ₳ <span id="pda-credits">0</span> UC</div>
+        <div style="color: #38bdf8; font-size: 10px;">WEP PAYLOAD DELIVERED: <span id="pda-water">0</span> KG</div>
+      </div>
+    </div>
+
+    <div class="pda-grid">
+      <!-- Left Column: Fleet Status -->
+      <div>
+        <div class="term-yellow" style="font-size: 11px; margin-bottom: 8px; border-bottom: 1px dashed #333; padding-bottom: 4px;">
+          > ACTIVE DPC FLEET ROSTER (SLOTS 1-9)
+        </div>
+        <div id="pda-roster-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Right Column: Requisition Shipyard -->
+      <div>
+        <div class="term-yellow" style="font-size: 11px; margin-bottom: 8px; border-bottom: 1px dashed #333; padding-bottom: 4px;">
+          > VESSEL REQUISITION (UNION-13 SLIPWAYS)
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          
+          <!-- Unit 1: AEGIS CARRIER -->
+          <div class="pda-card">
+            <div>
+              <div style="display: flex; justify-content: space-between;">
+                <span class="term-yellow font-bold">AEGIS ESCORT CARRIER</span>
+                <span style="color: #4ade80;">₳ 1,200</span>
+              </div>
+              <div class="term-dim" style="font-size: 9px; margin-top: 4px; line-height: 1.4;">
+                DPC tactical escort vessel with 4 autonomous defense drones. Designates strike coordinates against Exile raiders.
+              </div>
+              <div style="font-size: 9px; color: #737373; margin-top: 4px;">
+                HULL: 100 HP | DRONES: 4 UNITS | DOCK REPAIR: ENABLED
+              </div>
+            </div>
+            <button class="pda-buy-btn" id="buy-carrier-btn">> COMMISSION ESCORT CARRIER</button>
+          </div>
+
+          <!-- Unit 2: CORVETTE SQUADRON (PAIR) -->
+          <div class="pda-card">
+            <div>
+              <div style="display: flex; justify-content: space-between;">
+                <span class="term-yellow font-bold">FLAK PATROL CORVETTE (PAIR)</span>
+                <span style="color: #4ade80;">₳ 1,200</span>
+              </div>
+              <div class="term-dim" style="font-size: 9px; margin-top: 4px; line-height: 1.4;">
+                2-corvette fast intercept element. Dual fire modes: rapid pulse repeaters or heavy railgun. Left-click to switch.
+              </div>
+              <div style="font-size: 9px; color: #737373; margin-top: 4px;">
+                HULL: 2× 180 HP | SPEED: 195 PX/S | DOCK REPAIR: ENABLED
+              </div>
+            </div>
+            <button class="pda-buy-btn" id="buy-corvettes-btn">> COMMISSION CORVETTE PAIR</button>
+          </div>
+
+          <!-- Unit 3: STRATORESERVOIR -->
+          <div class="pda-card">
+            <div>
+              <div style="display: flex; justify-content: space-between;">
+                <span class="term-yellow font-bold">STRATORESERVOIR WEP-02</span>
+                <span style="color: #4ade80;">₳ 5,000</span>
+              </div>
+              <div class="term-dim" style="font-size: 9px; margin-top: 4px; line-height: 1.4;">
+                Colossal DPC atmospheric airship. Executes 90° vertical FLIP rotation in cumulonimbus storm cells for vacuum WEP condensation.
+              </div>
+              <div style="font-size: 9px; color: #737373; margin-top: 4px;">
+                HULL: 500 HP | CAPACITY: 5,000 KG | ADVANCES EXPEDITION SECTOR
+              </div>
+            </div>
+            <button class="pda-buy-btn" id="buy-stratoreservoir-btn">> COMMISSION STRATORESERVOIR</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 14px; text-align: center;">
+      <button id="pda-close-btn" class="pda-buy-btn" style="padding: 6px 20px;">
+        > RESUME SENSORS [TAB]
+      </button>
+    </div>
+  </div>
+
+  <!-- Starter Package Selection Modal -->
+  <div id="starter-modal" class="hidden term-modal">
+    <div class="term-yellow" style="font-size: 15px; font-weight: bold; margin-bottom: 6px;">// INITIAL ESCORT ALLOCATION</div>
+    <div class="term-dim" style="font-size: 11px; margin-bottom: 16px; line-height: 1.4;">COMMISSION 1 FREE ESCORT VESSEL FOR STRATORESERVOIR WEP-01:</div>
+    <div style="display: flex; gap: 14px; width: 100%;">
+      <button id="starter-carrier-btn" class="pda-buy-btn" style="flex: 1; padding: 12px; font-size: 11px;">AEGIS ESCORT CARRIER<span class="term-dim" style="display:block; font-size:9px; margin-top:4px;">4 DEFENSE DRONES · 100 HP</span></button>
+      <button id="starter-corvette-btn" class="pda-buy-btn" style="flex: 1; padding: 12px; font-size: 11px;">CORVETTE SQUADRON<span class="term-dim" style="display:block; font-size:9px; margin-top:4px;">2 INTERCEPTORS · 2×180 HP</span></button>
+    </div>
+  </div>
+
+  <!-- Pause Menu -->
+  <div id="pause-modal" class="hidden term-modal">
+    <div class="term-yellow" style="font-size: 15px; font-weight: bold; margin-bottom: 6px;">// SIMULATION PAUSED</div>
+    <div class="term-dim" style="font-size: 11px; margin-bottom: 16px; line-height: 1.4;">DPC TELEMETRY FEED FROZEN. [ESC] TO RESUME.</div>
+    <div style="display: flex; gap: 14px; width: 100%;">
+      <button id="pause-resume-btn" class="pda-buy-btn" style="flex: 1; padding: 10px; font-size: 11px;">> RESUME [ESC]</button>
+      <button id="pause-restart-btn" class="pda-buy-btn" style="flex: 1; padding: 10px; font-size: 11px;">> RE-INITIALIZE</button>
+    </div>
+  </div>
+
+  <!-- Demo Complete / Congratulations Modal -->
+  <div id="demo-complete-modal" class="hidden" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 80; background: #050505; border: 2px solid #facc15; box-shadow: 0 0 35px rgba(250, 204, 21, 0.25); width: 560px; max-width: 92vw; padding: 24px 28px; pointer-events: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #facc15; padding-bottom: 8px; margin-bottom: 12px;">
+      <div>
+        <div class="term-yellow" style="font-size: 13px; font-weight: bold;">// TRANSMISSION: UNION EXPEDITION HIGH COMMAND</div>
+        <div class="term-dim" style="font-size: 10px;">SECTOR 13 EXPEDITION BENCHMARK // PROTOCOL COMPLETE</div>
+      </div>
+      <div style="background: rgba(250, 204, 21, 0.15); border: 1px solid #facc15; padding: 3px 8px; color: #facc15; font-size: 10px; font-weight: bold; letter-spacing: 0.5px;">
+        ★ DEMO COMPLETE ★
+      </div>
+    </div>
+
+    <div style="text-align: center; margin: 16px 0 14px 0;">
+      <div style="color: #4ade80; font-size: 17px; font-weight: bold; letter-spacing: 1px;">
+        CONGRATULATIONS, COMMANDER!
+      </div>
+      <div class="term-yellow" style="font-size: 12px; margin-top: 5px; font-weight: bold;">
+        STRATORESERVOIR WEP-02 SUCCESSFULLY COMMISSIONED
+      </div>
+    </div>
+
+    <div style="font-size: 11px; line-height: 1.6; color: #d4d4d4; margin-bottom: 14px;">
+      With the commissioning of your second colossal Stratoreservoir, the Union has established an autonomous atmospheric water extraction grid across Sector 13. Your fleet has braved hypercell lightning storms and repelled Exile incursions.
+    </div>
+
+    <!-- To Be Continued Notice -->
+    <div style="border: 1px dashed #facc15; background: rgba(250, 204, 21, 0.05); padding: 12px 14px; margin-bottom: 14px; text-align: center;">
+      <div style="color: #facc15; font-size: 13px; font-weight: bold; letter-spacing: 1.5px;">
+        ▶ LEVEL 2: TO BE CONTINUED
+      </div>
+      <div class="term-dim" style="font-size: 10px; margin-top: 4px; line-height: 1.4;">
+        Sector 14 frontier corridors, deep-troposphere anvil storms, capital-class raider dreadnoughts, and multi-reservoir fleet automation are currently in active development.
+      </div>
+    </div>
+
+    <!-- Debriefing Telemetry Stats -->
+    <div style="background: #0c0c0c; border: 1px solid #262626; padding: 10px 14px; margin-bottom: 16px; font-size: 10px;">
+      <div class="term-dim" style="margin-bottom: 6px; border-bottom: 1px dashed #222; padding-bottom: 4px;">// EXPEDITION PERFORMANCE LOG</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div><span class="term-dim">TIME DEPLOYED:</span> <span id="victory-days" style="color: #ffffff; font-weight: bold;">DAY 1</span></div>
+        <div><span class="term-dim">RAID WAVES REPELLED:</span> <span id="victory-waves" style="color: #ffffff; font-weight: bold;">0</span></div>
+        <div><span class="term-dim">WEP DELIVERED:</span> <span id="victory-water" style="color: #38bdf8; font-weight: bold;">0 KG</span></div>
+        <div><span class="term-dim">RESERVE FUNDS:</span> <span id="victory-credits" style="color: #4ade80; font-weight: bold;">₳ 0 UC</span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px;">
+      <button id="victory-continue-btn" class="pda-buy-btn" style="flex: 1; padding: 10px; font-size: 11px;">
+        > CONTINUE PATROL (FREE PLAY)
+      </button>
+      <button id="victory-restart-btn" class="pda-buy-btn" style="flex: 1; padding: 10px; font-size: 11px; border-color: #737373; color: #a3a3a3;">
+        > RE-INITIALIZE EXPEDITION
+      </button>
+    </div>
+  </div>
+
+  <!-- Terminal Game Over Prompt -->
+  <div id="game-over-modal" class="hidden" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 60; background: #050505; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #ef4444; width: 480px; max-width: 90vw; padding: 24px 22px; text-align: center; pointer-events: auto;">
+    <div style="font-size: 15px; font-weight: bold; margin-bottom: 8px; color: #ef4444;">*** [CRITICAL] STRATORESERVOIR DESTROYED ***</div>
+    <div style="font-size: 11px; margin-bottom: 14px; line-height: 1.4; color: #a3a3a3;">STRATORESERVOIR WEP-01 HULL COMPROMISED IN SECTOR 13. WEP EXTRACTION CEASED.</div>
+    <button id="restart-btn" class="pda-buy-btn" style="border-color: #ef4444; color: #ef4444;">> RE-INITIALIZE EXPEDITION</button>
+  </div>
+
+  <!-- How To Play Manual Modal -->
+  <div id="how-to-play-modal" class="hidden">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #facc15; padding-bottom: 6px; margin-bottom: 4px;">
+      <div class="term-yellow" style="font-size: 14px; font-weight: bold;">// DPC OPERATIONS MANUAL</div>
+      <div class="term-dim" style="font-size: 10px;">WEP-01 STRATORESERVOIR PROTOCOL</div>
+    </div>
+
+    <div class="howto-section">
+      <h3>OPERATIONAL OBJECTIVE</h3>
+      <div class="howto-row"><span class="howto-desc">Execute WEP condensation in cumulonimbus storm cells → Dock at Union-13 Arcology (2850, 480) for Union Credits → Commission DPC escorts (Tab) → Repel Exile raiders.</span></div>
+    </div>
+
+    <div class="howto-section">
+      <h3>NAVIGATION &amp; WEP EXTRACTION</h3>
+      <div class="howto-row"><span class="howto-keys"><span class="mouse">🖱️ RIGHT</span></span><span class="howto-desc">Set navigation waypoint</span></div>
+      <div class="howto-row"><span class="howto-keys"><kbd>⇧</kbd> + <span class="mouse">🖱️ RIGHT</span></span><span class="howto-desc">Queue multiple waypoints</span></div>
+      <div class="howto-row"><span class="howto-keys"><span class="mouse">🖱️ LEFT</span> (Stratoreservoir)</span><span class="howto-desc">Initiate 90° FLIP rotation &amp; vacuum condensation in mature storms</span></div>
+    </div>
+
+    <div class="howto-section">
+      <h3>TACTICAL COMBAT COMMANDS</h3>
+      <div class="howto-row"><span class="howto-keys"><span class="mouse">🖱️ LEFT</span> (Escort Carrier)</span><span class="howto-desc">Designate defense drone strike coordinate</span></div>
+      <div class="howto-row"><span class="howto-keys"><span class="mouse">🖱️ LEFT</span> (Corvette)</span><span class="howto-desc">Toggle weapon mode (Rapid Cannons ↔ Heavy Railgun)</span></div>
+    </div>
+
+    <div class="howto-section">
+      <h3>CAMERA &amp; SENSORS</h3>
+      <div class="howto-row"><span class="howto-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="howto-desc">Pan tactical sensor view</span></div>
+      <div class="howto-row"><span class="howto-keys"><kbd>␣ SPACE</kbd></span><span class="howto-desc">Recenter on selected ship</span></div>
+      <div class="howto-row"><span class="howto-keys"><span class="mouse">🖱️ SCROLL</span></span><span class="howto-desc">Zoom sensor optics (35% – 220%)</span></div>
+    </div>
+
+    <div class="howto-section">
+      <h3>FLEET CONTROLS</h3>
+      <div class="howto-row"><span class="howto-keys"><kbd>1</kbd>–<kbd>9</kbd></span><span class="howto-desc">Select fleet slot / command group</span></div>
+      <div class="howto-row"><span class="howto-keys"><kbd>⇥ TAB</kbd></span><span class="howto-desc">Open DPC Logistics &amp; Shipyard</span></div>
+      <div class="howto-row"><span class="howto-keys"><kbd>⎋ ESC</kbd></span><span class="howto-desc">Pause simulation</span></div>
+      <div class="howto-row"><span class="howto-keys"><kbd>M</kbd></span><span class="howto-desc">Toggle audio telemetry</span></div>
+    </div>
+
+    <div class="howto-section">
+      <h3>CUMULONIMBUS STORM THREAT TIERS</h3>
+      <div class="howto-row"><span class="howto-keys"><span style="color:#9ca3af;">■ DEVELOPING</span></span><span class="howto-desc">Developing cumulus · Insufficient vapor density for WEP</span></div>
+      <div class="howto-row"><span class="howto-keys"><span style="color:#facc15;">■ CHARGED</span></span><span class="howto-desc">Mature cumulonimbus supercell · High WEP yield · Nominal condensation</span></div>
+      <div class="howto-row"><span class="howto-keys"><span style="color:#ef4444;">■ HYPERCELL</span></span><span class="howto-desc">Apex cumulonimbus hypercell · Maximum WEP yield · ⚡ Severe lightning discharge</span></div>
+    </div>
+
+    <div style="margin-top: 12px; text-align: center;">
+      <button id="how-to-play-back-btn" class="pda-buy-btn" style="padding: 6px 22px; font-size: 11px;">> RESUME [⎋]</button>
+    </div>
+  </div>
+
+  <!-- Terminal Shutdown Screen (EXIT) -->
+  <div id="exit-screen" class="hidden">
+    <div class="term-yellow" style="font-size: 18px; font-weight: bold;">SESSION TERMINATED</div>
+    <div class="term-dim" style="font-size: 11px;">TELEMETRY LINK CLOSED. CLOSE BROWSER TAB TO DISCONNECT.</div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
